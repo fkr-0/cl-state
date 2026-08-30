@@ -263,3 +263,28 @@
     (is (= (1+ before-version) (application-state-version state)))
     (is (= (1+ before-revision) (state-revision state)))
     (is-false later-called)))
+
+(test observer-failure-can-be-explicitly-skipped-with-restart
+  (let ((state (make-state :initial '(:count 0)))
+        (restart-seen nil)
+        (later-called nil))
+    (add-observer state :count
+                  (lambda (old new)
+                    (declare (ignore old new))
+                    (error "observer boom")))
+    (add-observer state :count
+                  (lambda (old new)
+                    (declare (ignore old new))
+                    (setf later-called t)))
+    (handler-bind
+        ((observer-notification-error
+           (lambda (condition)
+             (let ((restart
+                     (find-restart 'continue-observer-notification condition)))
+               (is-true restart)
+               (setf restart-seen t)
+               (invoke-restart restart)))))
+      (state-set state :count 1))
+    (is-true restart-seen)
+    (is-true later-called)
+    (is (= 1 (state-ref state :count)))))
