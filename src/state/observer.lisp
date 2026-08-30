@@ -24,6 +24,8 @@
              (observer-notification-error-phase condition)
              (observer-notification-error-cause condition)))))
 
+
+
 (defun add-observer (app key fn)
   "Register runtime observer FN for KEY in APP.
 
@@ -87,3 +89,8 @@ later observers. Notification never rolls back logical state."
         (continue-observer-notification ()
           :report "Skip the failed observer and continue notifying later observers."
           nil)))))
+
+
+(defmethod cl-state.core::%deliver-state-change
+    ((state application-state) key old new &key (phase :manual))
+  (notify-observers state key old new :phase phase))

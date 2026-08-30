@@ -101,4 +101,4 @@ released."
 
 
 
-(defun %notify-transaction-changes (app ordered-changes) "Notify committed transaction changes in mutation order." (dolist (change ordered-changes) (cl-state.observer:notify-observers app (first change) (cl-state.core::%external-state-change-value (second change)) (cl-state.core::%external-state-change-value (third change)) :phase :transaction-commit)))
+(defun %notify-transaction-changes (app ordered-changes) "Notify committed transaction changes in mutation order." (dolist (change ordered-changes) (cl-state.core::%deliver-state-change app (first change) (cl-state.core::%external-state-change-value (second change)) (cl-state.core::%external-state-change-value (third change)) :phase :transaction-commit)))
