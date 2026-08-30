@@ -1,0 +1,14 @@
+;;; -*- Mode: common-lisp; -*-
+(:api-version "0.4")
+
+(:source "quicklisp" :type :clpi :url "https://quicklisp.common-lisp-project-index.org/")
+
+(:asd "./cl-state.asd")
+(:asd "./cl-state-tests.asd")
+
+(:github "fiveam"
+ :path "lispci/fiveam"
+ :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379")
+
+(:system "alexandria" :source "quicklisp")
+(:system "bordeaux-threads")

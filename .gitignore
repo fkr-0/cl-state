@@ -1,0 +1,32 @@
+# Common Lisp
+*.fasl
+*.dx32fsl
+*.dx64fsl
+*.lx32fsl
+*.lx64fsl
+*.sfsl
+*.lib
+*.o
+*.so
+*.dylib
+
+# ASDF build artifacts
+*.lisp-temp
+.build/
+
+# Editor files
+*.swp
+*.swo
+*~
+.#*
+.DS_Store
+
+# CLPM
+.clpm/
+
+# Test outputs
+test.log
+*.out
+
+# Cache
+.cache/
