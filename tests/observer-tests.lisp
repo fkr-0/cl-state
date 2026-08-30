@@ -288,3 +288,49 @@
     (is-true restart-seen)
     (is-true later-called)
     (is (= 1 (state-ref state :count)))))
+
+
+(test delivery-protocol-remains-private
+  "The mutation-to-observer delivery seam stays internal to CL-STATE implementation packages."
+  (multiple-value-bind (symbol status)
+      (find-symbol "%DELIVER-STATE-CHANGE" :cl-state.core)
+    (is-true symbol)
+    (is (eq :internal status)))
+  (multiple-value-bind (symbol status)
+      (find-symbol "%DELIVER-STATE-CHANGE" :cl-state.api)
+    (is-false symbol)
+    (is-false status)))
+
+
+(test mutation-paths-preserve-observer-condition-phase-contract
+  "Direct, transactional, and persistent commits report the same observer error contract with path-specific phases."
+  (dolist (case '((:direct . :direct-mutation)
+                  (:transaction . :transaction-commit)
+                  (:persistent . :persistent-commit)))
+    (destructuring-bind (mode . expected-phase) case
+      (let ((state (make-state :initial '(:count 0)))
+            (seen nil))
+        (add-observer state :count
+                      (lambda (old new)
+                        (declare (ignore old new))
+                        (error "phase probe")))
+        (handler-bind
+            ((observer-notification-error
+               (lambda (condition)
+                 (setf seen
+                       (list (observer-notification-error-phase condition)
+                             (observer-notification-error-old-value condition)
+                             (observer-notification-error-new-value condition)))
+                 (let ((restart
+                         (find-restart 'continue-observer-notification condition)))
+                   (is-true restart)
+                   (invoke-restart restart)))))
+          (ecase mode
+            (:direct
+             (state-set state :count 1))
+            (:transaction
+             (with-transaction (state :name :phase-contract)
+               (state-set state :count 1)))
+            (:persistent
+             (cl-state.patch::apply-patches-shared state '((:count 1))))))
+        (is (equal (list expected-phase 0 1) seen))))))
