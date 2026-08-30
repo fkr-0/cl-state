@@ -14,6 +14,18 @@
   (frozen-p nil)
   (transaction-owner nil))
 
+(defgeneric %deliver-state-change (state key old new &key phase)
+  (:documentation
+   "Internal one-way protocol for delivering an already-committed state change.
+
+CORE, PATCH, TX, and persistent commit code depend only on this protocol. The
+observer layer installs the APPLICATION-STATE method later, keeping callback
+registry and condition semantics out of the mutation layers."))
+
+(defmethod %deliver-state-change ((state t) key old new &key phase)
+  (declare (ignore state key old new phase))
+  nil)
+
 (setf (documentation 'application-state-data 'function)
       "Low-level representation accessor for APPLICATION-STATE.
 
@@ -374,7 +386,7 @@ Raw hash-table/list inputs are copied directly."
 (defmethod get-path ((path symbol) (state application-state) &optional default)
   (state-ref state path default))
 
-(defun %state-set-application (state key value expected-revision) "Store VALUE atomically, optionally requiring EXPECTED-REVISION. Observer callbacks run after lock release." (assert-valid-state-path key) (assert-state-mutation-allowed state :path key :operation :set) (multiple-value-bind (old notify-p revision) (bt:with-lock-held ((application-state-lock state)) (%assert-state-write-available state :set) (%assert-state-revision state expected-revision :set) (let* ((data (application-state-data state)) (old (get-path key data +state-missing-value+)) (data* (set-path data key value)) (transaction-p (transaction-active-p state))) (setf (application-state-data state) data*) (push (list key old value) (application-state-log state)) (incf (application-state-version state)) (unless transaction-p (incf (application-state-revision state))) (values old (not transaction-p) (application-state-revision state)))) (when notify-p (cl-state.observer:notify-observers state key (%external-state-change-value old) value :phase :direct-mutation)) (values value revision)))
+(defun %state-set-application (state key value expected-revision) "Store VALUE atomically, optionally requiring EXPECTED-REVISION. Observer callbacks run after lock release." (assert-valid-state-path key) (assert-state-mutation-allowed state :path key :operation :set) (multiple-value-bind (old notify-p revision) (bt:with-lock-held ((application-state-lock state)) (%assert-state-write-available state :set) (%assert-state-revision state expected-revision :set) (let* ((data (application-state-data state)) (old (get-path key data +state-missing-value+)) (data* (set-path data key value)) (transaction-p (transaction-active-p state))) (setf (application-state-data state) data*) (push (list key old value) (application-state-log state)) (incf (application-state-version state)) (unless transaction-p (incf (application-state-revision state))) (values old (not transaction-p) (application-state-revision state)))) (when notify-p (%deliver-state-change state key (%external-state-change-value old) value :phase :direct-mutation)) (values value revision)))
 
 (defmethod (setf state-ref) (value (state application-state) (key t))
   "Atomically store VALUE at KEY inside STATE and log the change."
