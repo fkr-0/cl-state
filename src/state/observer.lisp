@@ -61,23 +61,29 @@ and removed."
   "Notify APP observers for KEY in registration order.
 
 The observer list is captured while APP's internal lock is held, then the lock
-is released before any callback executes. Observers run fail-fast. An arbitrary
-callback error is wrapped in OBSERVER-NOTIFICATION-ERROR with the callback,
-values, phase, and original cause. Notification never rolls back logical state."
+is released before any callback executes. Observers fail fast by default. An
+arbitrary callback error is wrapped in OBSERVER-NOTIFICATION-ERROR with the
+callback, values, phase, and original cause. A handler may explicitly invoke
+CONTINUE-OBSERVER-NOTIFICATION to skip that failed callback and continue with
+later observers. Notification never rolls back logical state."
   (let ((observers
           (bt:with-lock-held ((application-state-lock app))
             (copy-list (%alist-get key (application-state-observers app))))))
     (dolist (fn observers)
-      (handler-case
-          (funcall fn old new)
-        (observer-notification-error (condition)
-          (error condition))
-        (error (cause)
-          (error 'observer-notification-error
-                 :state app
-                 :key key
-                 :observer fn
-                 :old-value old
-                 :new-value new
-                 :phase phase
-                 :cause cause))))))
+      (restart-case
+          (handler-case
+              (funcall fn old new)
+            (observer-notification-error (condition)
+              (error condition))
+            (error (cause)
+              (error 'observer-notification-error
+                     :state app
+                     :key key
+                     :observer fn
+                     :old-value old
+                     :new-value new
+                     :phase phase
+                     :cause cause)))
+        (continue-observer-notification ()
+          :report "Skip the failed observer and continue notifying later observers."
+          nil)))))
