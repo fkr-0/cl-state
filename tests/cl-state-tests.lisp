@@ -39,12 +39,15 @@
                 #:application-state
                 #:application-state-p
                 #:application-state-data
+                #:application-state-log
                 #:application-state-backend
                 #:application-state-history
                 #:application-state-undone
                 #:application-state-version
                 #:application-state-observers
                 #:set-application-state-backend
+                #:invalid-state-path
+                #:invalid-state-path-path
                 #:deep-copy-application-state
                 #:application-state-plist
                 #:get-component-by-path
@@ -82,6 +85,27 @@
     (setf (state-ref state '(:a :b)) 1)
     (is (= (state-ref state '(:a :b)) 1))
     (is (= (state-ref state '(:missing) 42) 42))))
+
+(test public-state-log-externalizes-internal-change-markers
+  (let ((state (make-state)))
+    (state-set state '(:foo) 1)
+    (apply-patch state (make-patch :path '(:foo) :op :remove))
+    (let ((log (application-state-log state)))
+      (is (equal '((:foo) 1 :elmtui-delete-path) (first log)))
+      (is (equal '((:foo) :not-present 1) (second log)))
+      ;; The public log is owned; editing it must not mutate managed metadata.
+      (setf (second (second log)) :changed)
+      (is (eq :not-present
+              (second (second (application-state-log state))))))))
+
+(test invalid-state-path-is-a-typed-inspectable-error
+  (let* ((state (make-state))
+         (condition
+           (handler-case
+               (progn (state-ref state '(nil)) nil)
+             (invalid-state-path (error) error))))
+    (is (typep condition 'invalid-state-path))
+    (is (equal '(nil) (invalid-state-path-path condition)))))
 
 (test merge-patches-basic
   (let* ((state (make-state))
