@@ -137,11 +137,13 @@
            (first (cl-state.patch::apply-patches-shared
                    source '(((:changed :left) 9))))
            (untouched (state-ref first :untouched))
+           (first-log (cl-state.core:application-state-log first))
            (second (cl-state.patch::apply-patches-shared
                     first '(((:changed :right) 10)))))
       (is-true (state-frozen-p first))
       (is-true (state-frozen-p second))
       (is (eq untouched (state-ref second :untouched)))
+      (is (eq first-log (cdr (cl-state.core:application-state-log second))))
       (is-false (eq (state-ref first :changed)
                     (state-ref second :changed)))
       (is (= 7 (state-ref second '(:untouched :value)))))))

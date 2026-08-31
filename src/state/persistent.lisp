@@ -31,8 +31,10 @@ sources can safely retain their already-owned data graph for structural sharing.
            (cl-state.core::%detach-state-value-spine
             (application-state-data state)))
        (application-state-backend state)
-       (cl-state.core::%detach-state-value-spine
-        (application-state-log state))
+       (if frozenp
+           (application-state-log state)
+           (cl-state.core::%detach-state-value-spine
+            (application-state-log state)))
        (copy-list (application-state-history state))
        (application-state-version state)
        (application-state-revision state)
@@ -61,7 +63,7 @@ differential tests."
         (let ((data (if frozenp
                         captured-data
                         (freeze-state-value captured-data)))
-              (log (copy-state-value captured-log))
+              (log (if frozenp captured-log (copy-state-value captured-log)))
               (changes nil))
           (dolist (item patches)
             (let ((patch (%normalize-patch item)))
