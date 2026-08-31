@@ -74,7 +74,20 @@ internal fresh-state commit.")
              (state-revision-conflict-expected-revision condition)
              (state-revision-conflict-actual-revision condition)))))
 
-(define-condition state-transaction-conflict (state-conflict) () (:documentation "Signaled when a managed operation requires a stable state owned by another transaction.") (:report (lambda (condition stream) (format stream "State is owned by another transaction during ~S." (state-conflict-operation condition)))))
+(define-condition state-transaction-conflict (state-conflict) ()
+  (:documentation "Signaled when a managed operation requires a stable state owned by another transaction.")
+  (:report
+   (lambda (condition stream)
+     (format stream "State is owned by another transaction during ~S."
+             (state-conflict-operation condition)))))
+
+(define-condition invalid-state-path (error)
+  ((path :initarg :path :reader invalid-state-path-path))
+  (:documentation "Signaled when a CL-STATE operation receives an invalid logical path.")
+  (:report
+   (lambda (condition stream)
+     (format stream "Invalid state path ~S. Expected a symbol or proper list of non-NIL symbols."
+             (invalid-state-path-path condition)))))
 
 (defvar +state-missing-value+ (gensym "CL-STATE-MISSING-") "Opaque internal marker for an absent value in managed change records.")
 
@@ -295,8 +308,9 @@ COPY-STATE-VALUE methods run only after that lock has been released."
            (every (lambda (part) (and part (symbolp part))) path))))
 
 (defun assert-valid-state-path (path)
+  "Return PATH or signal INVALID-STATE-PATH with the rejected value."
   (unless (valid-state-path-p path)
-    (error "Invalid state path ~S. Expected a symbol or proper list of non-NIL symbols." path))
+    (error 'invalid-state-path :path path))
   path)
 
 (defgeneric state-ref (place key &optional default)
