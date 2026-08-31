@@ -144,14 +144,14 @@ internal fresh-state commit.")
 
 Arguments:
 + ~:initial~ — The initial data to populate the state. This can be any data structure compatible with the chosen backend.
-+ ~:backend~ — The backend type for storing the state. Defaults to ~:hash-table~. Other supported backends depend on your implementation of ~%normalize-backend~.
++ ~:backend~ — The backend type for storing the state: ~:hash-table~ (default) or ~:plist~.
 
 Returns:
 + A new application state object created by ~make-application-state~, initialized with the given data and backend.
 
 Usage:
-  (make-state :initial '((:foo . 42) (:bar . 99)))
-  (make-state :initial '((:foo . 42)) :backend :alist)
+  (make-state :initial '(:foo 42 :bar 99))
+  (make-state :initial '(:foo 42) :backend :plist)
 
 Notes:
 + All arguments are keyword arguments; you must use ~:initial~ and ~:backend~ when calling the function.
