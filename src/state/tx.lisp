@@ -13,31 +13,33 @@
       default)))
 
 (defun %reserve-transaction (app expected-revision)
-  "Reserve APP for one outer transaction and return rollback metadata."
+  "Reserve APP for one outer transaction and return rollback metadata.
+
+The current log tail is captured by identity. Since mutations PUSH new records,
+commit and rollback can later splice only the transaction prefix without
+scanning the pre-existing log."
   (bt:with-lock-held ((application-state-lock app))
     (cl-state.core::%assert-state-write-available app :transaction)
     (cl-state.core::%assert-state-revision app expected-revision :transaction)
     (let ((token (gensym "TX-OWNER-")))
       (setf (cl-state.core::application-state-transaction-owner app) token)
       (values token
-              (length (application-state-log app))
+              (application-state-log app)
               (application-state-version app)
               (application-state-history app)
               (application-state-undone app)))))
 
-(defun %commit-transaction (app token start-log-length name)
+(defun %commit-transaction (app token start-log-anchor name)
   "Commit the reserved transaction and return changes in mutation order."
   (bt:with-lock-held ((application-state-lock app))
     (unless (eq token (cl-state.core::application-state-transaction-owner app))
       (error 'state-transaction-conflict :state app :operation :transaction-commit))
-    (let* ((newest-changes (%changes-since app start-log-length))
+    (let* ((newest-changes (%changes-since app start-log-anchor))
            (changes (nreverse (copy-list newest-changes)))
-           (tx (make-tx :id (gensym "TX-") :name name :changes changes))
-           (log (application-state-log app))
-           (new-count (- (length log) start-log-length)))
+           (tx (make-tx :id (gensym "TX-") :name name :changes changes)))
       (push tx (application-state-history app))
       (setf (application-state-undone app) nil
-            (application-state-log app) (subseq log new-count))
+            (application-state-log app) start-log-anchor)
       (incf (application-state-revision app))
       (setf (cl-state.core::application-state-transaction-owner app) nil)
       changes)))
@@ -64,7 +66,7 @@ released."
                                     :operation :nested-transaction))
            ,@body)
          (multiple-value-bind
-               (token# start-log-length# start-version# start-history# start-undone#)
+               (token# start-log-anchor# start-version# start-history# start-undone#)
              (%reserve-transaction app# expected-revision#)
            (let ((committedp# nil)
                  (result-values# nil)
@@ -78,11 +80,11 @@ released."
                     (setf result-values#
                           (multiple-value-list (progn ,@body)))
                     (setf ordered-changes#
-                          (%commit-transaction app# token# start-log-length# name#)
+                          (%commit-transaction app# token# start-log-anchor# name#)
                           committedp# t))
                (unless committedp#
                  (%restore-transaction-state
-                  app# token# start-log-length# start-version#
+                  app# token# start-log-anchor# start-version#
                   start-history# start-undone#)))
              (%notify-transaction-changes app# ordered-changes#)
              (values-list result-values#))))))
@@ -91,13 +93,43 @@ released."
 
 (defun redo (app) "Redo the last undone transaction without observer delivery. Successful replay advances REVISION exactly once while retaining the historical compatibility rule that VERSION does not change." (assert-state-mutation-allowed app :operation :redo) (bt:with-lock-held ((application-state-lock app)) (cl-state.core::%assert-state-write-available app :redo) (let ((tx (pop (application-state-undone app)))) (when tx (push tx (application-state-history app)) (dolist (chg (tx-changes tx)) (setf (application-state-data app) (if (cl-state.core::%state-deleted-value-p (third chg)) (cl-state.utils:remove-path (application-state-data app) (first chg)) (cl-state.utils:set-path (application-state-data app) (first chg) (third chg))))) (incf (application-state-revision app))) tx)))
 
-(defun %changes-since (app start-log-length)
-  "Return changes logged after START-LOG-LENGTH, newest first."
-  (let* ((log (application-state-log app))
-         (count (- (length log) start-log-length)))
-    (subseq log 0 count)))
+(defun %changes-since (app start-log-anchor)
+  "Return changes prepended after START-LOG-ANCHOR, newest first.
 
-(defun %restore-transaction-state (app token start-log-length start-version start-history start-undone) "Roll APP back to the metadata and logical values captured at transaction entry." (bt:with-lock-held ((application-state-lock app)) (unless (eq token (cl-state.core::application-state-transaction-owner app)) (error 'state-transaction-conflict :state app :operation :transaction-rollback)) (unwind-protect (let ((changes (%changes-since app start-log-length))) (dolist (change changes) (let ((path (first change)) (old (second change))) (setf (application-state-data app) (if (cl-state.core::%state-missing-value-p old) (cl-state.utils:remove-path (application-state-data app) path) (cl-state.utils:set-path (application-state-data app) path old))))) (let* ((log (application-state-log app)) (new-count (- (length log) start-log-length))) (setf (application-state-log app) (subseq log new-count))) (setf (application-state-version app) start-version (application-state-history app) start-history (application-state-undone app) start-undone)) (setf (cl-state.core::application-state-transaction-owner app) nil))))
+Traversal is bounded by transaction-local changes rather than total retained
+log size. If the captured tail is no longer reachable, fail closed instead of
+silently committing against corrupted transaction metadata."
+  (loop for cursor = (application-state-log app) then (cdr cursor)
+        until (eq cursor start-log-anchor)
+        do (when (null cursor)
+             (error 'state-transaction-conflict
+                    :state app
+                    :operation :transaction-log-anchor))
+        collect (car cursor)))
+
+(defun %restore-transaction-state (app token start-log-anchor start-version start-history start-undone)
+  "Roll APP back to the metadata and logical values captured at transaction entry."
+  (bt:with-lock-held ((application-state-lock app))
+    (unless (eq token (cl-state.core::application-state-transaction-owner app))
+      (error 'state-transaction-conflict
+             :state app
+             :operation :transaction-rollback))
+    (unwind-protect
+         (let ((changes (%changes-since app start-log-anchor)))
+           (dolist (change changes)
+             (let ((path (first change))
+                   (old (second change)))
+               (setf (application-state-data app)
+                     (if (cl-state.core::%state-missing-value-p old)
+                         (cl-state.utils:remove-path
+                          (application-state-data app) path)
+                         (cl-state.utils:set-path
+                          (application-state-data app) path old)))))
+           (setf (application-state-log app) start-log-anchor
+                 (application-state-version app) start-version
+                 (application-state-history app) start-history
+                 (application-state-undone app) start-undone))
+      (setf (cl-state.core::application-state-transaction-owner app) nil))))
 
 
 

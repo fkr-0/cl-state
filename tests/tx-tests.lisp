@@ -82,6 +82,35 @@
       (is (eq :y b))
       (is (eq :z c)))))
 
+(test transaction-log-tail-anchor-survives-commit-and-rollback
+  "Transactions splice their local prefix without copying the retained direct log."
+  (let ((state (make-state)))
+    ;; Build a deliberately non-trivial retained log before entering a transaction.
+    (dotimes (index 128)
+      (state-set state :seed index))
+    (let ((anchor (cl-state.core:application-state-log state)))
+      (with-transaction (state :name :anchor-commit)
+        (state-set state :inside :committed))
+      (is (eq anchor (cl-state.core:application-state-log state)))
+      (is (= 1 (length (tx-changes (first (application-state-history state))))))
+      (is (eq :committed (state-ref state :inside)))
+      (let ((before-version (application-state-version state))
+            (before-revision (state-revision state))
+            (before-history (application-state-history state)))
+        (handler-case
+            (with-transaction (state :name :anchor-rollback)
+              (state-set state :inside :temporary)
+              (state-set state :rollback-only t)
+              (error "rollback anchor probe"))
+          (error (condition)
+            (declare (ignore condition))))
+        (is (eq anchor (cl-state.core:application-state-log state)))
+        (is (eq :committed (state-ref state :inside)))
+        (is (eq :missing (state-ref state :rollback-only :missing)))
+        (is (= before-version (application-state-version state)))
+        (is (= before-revision (state-revision state)))
+        (is (eq before-history (application-state-history state)))))))
+
 ;;; undo tests
 
 (test undo-single-change
