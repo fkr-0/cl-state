@@ -140,11 +140,15 @@
                          "Must be a non-negative integer")
 
 (defun finite-number-p (value)
-  (and (numberp value)
-       (or (not (floatp value))
-           #+sbcl (and (not (sb-ext:float-infinity-p value))
+  "True for finite real and complex numbers, rejecting nonfinite components."
+  (typecase value
+    (complex (and (finite-number-p (realpart value))
+                  (finite-number-p (imagpart value))))
+    (float #+sbcl (and (not (sb-ext:float-infinity-p value))
                        (not (sb-ext:float-nan-p value)))
-           #-sbcl (= value value))))
+           #-sbcl (= value value))
+    (rational t)
+    (t nil)))
 (register-type-predicate :finite-number #'finite-number-p "Must be a finite number")
 
 (defun keyword-symbol-p (value)

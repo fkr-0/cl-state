@@ -434,9 +434,10 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-`cl-state` is maintained in-tree with ElmTUI; it is not currently a separate
-published repository. Contributions to this library should preserve that
-one-way ownership boundary.
+`cl-state` is developed in this standalone repository. ElmTUI consumes a
+separately pinned submodule revision; its checkout and manifests must not be
+modified as part of this library's release preparation. No registry publication
+is implied by a release candidate.
 
 When preparing changes:
 
@@ -444,6 +445,23 @@ When preparing changes:
 2. Ensure `asdf:test-system "cl-state"` passes from the library CLPM bundle.
 3. Run the ElmTUI integration release gate before treating the change as a
    release candidate.
+
+## Reproducible source archive
+
+After committing scoped changes, create a tracked-source-only archive and its
+SHA256 digest without publishing or creating a tag:
+
+    bash scripts/release-source.sh /tmp/cl-state-0.2.0.tar.gz
+
+To extract it into an isolated temporary directory and run the standalone ASDF
+test operation from that extracted copy (requires CLPM and SBCL):
+
+    COLD_TEST=1 bash scripts/release-source.sh /tmp/cl-state-0.2.0-cold.tar.gz
+
+The archive uses `git archive HEAD` and `gzip -n` to avoid embedding the
+checkout path or gzip timestamps. Untracked `bridge.yml` is intentionally not
+bundled; CLPM and ASDF metadata are committed standalone inputs. The consumer
+integrator must separately verify and update ElmTUI's pinned submodule commit.
 
 ## Changelog
 

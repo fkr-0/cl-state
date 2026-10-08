@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Candidate version: **0.2.0**. This remains an in-tree candidate and is not a
 registry publication or separate-repository release.
 
+### Fixed
+- Reject non-finite real or imaginary components in complex values passed to `finite-number-p` / `:finite-number` validation.
+
+### Release engineering
+- Standalone tracked-source archive generation with cold extracted-copy ASDF testing via CLPM and SBCL.
+- Clarified the standalone write authority and read-only ElmTUI consumer boundary.
+
 ### Added
 - Monotonic committed revisions via `state-revision`, atomic value/revision reads via `state-value-at-revision`, revision-conditional mutation via `state-set-if-revision`, and `:expected-revision` transaction preconditions.
 - Typed `state-revision-conflict` and `state-transaction-conflict` conditions with inspectable operation and revision context.

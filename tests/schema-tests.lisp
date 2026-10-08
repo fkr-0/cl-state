@@ -165,6 +165,11 @@
   "Testing finite-number predicate"
   (validate-type 3.14 :finite-number)
   (validate-type 42 :finite-number)
+  (validate-type #C(3.0 4.0) :finite-number)
+  (is-false (finite-number-p :not-a-number))
+  #+sbcl
+  (is-false (finite-number-p
+             (complex 1.0d0 sb-ext:double-float-positive-infinity)))
   (validate-type most-positive-long-float :finite-number)
   #+sbcl
   (signals error
