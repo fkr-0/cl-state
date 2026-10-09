@@ -1,5 +1,22 @@
 (in-package :cl-state.schema)
 
+;;; Schema predicates and validation for cl-state.
+;;;
+;;; The registry maps keyword-like type names to predicates and descriptions.
+;;; REGISTER-TYPE-PREDICATE accepts a type name, function and optional text.
+;;; DEFINE-TYPE-PREDICATE defines and registers a named predicate.
+;;; VALIDATE-TYPE returns T on success and signals an ERROR on failure.
+;;; Supported compound specifications are (OR ...), (AND ...), (LIST TYPE),
+;;; and (VECTOR TYPE); registered simple types include :STRING and :INTEGER.
+;;;
+;;; Example inside the CL-STATE.SCHEMA package:
+;;;   (define-type-predicate short-name-p (value)
+;;;     (and (stringp value) (plusp (length value))))
+;;;   (validate-type "Ada" :short-name-p)
+;;;   (register-enum-type :color '(:red :green :blue))
+;;;   (validate-type :red :color)
+;;; To inspect failures, use HANDLER-CASE around VALIDATE-TYPE.
+;;;
 ;; Comprehensive type predicate registry
 (defvar *type-predicates* (make-hash-table :test #'equal)
   "Registry of type predicates")
@@ -16,7 +33,7 @@
   "Register a predicate for a type"
   (let ((key (%canonical-type-name type-name)))
     (setf (gethash key *type-predicates*) predicate)
-  (when description
+    (when description
       (setf (gethash key *type-descriptions*) description))
     key))
 
@@ -32,10 +49,10 @@
   "Get a predicate for a type"
   (let ((key (%canonical-type-name type-name)))
     (or (gethash key *type-predicates*)
-    ;; For simple types, try to find CL built-in type predicate
-    (let ((possible-predicate
-            (find-symbol (concatenate 'string (symbol-name key) "P") :cl)))
-      (when (and possible-predicate (fboundp possible-predicate))
+      ;; For simple types, try to find CL built-in type predicate
+      (let ((possible-predicate
+              (find-symbol (concatenate 'string (symbol-name key) "P") :cl)))
+        (when (and possible-predicate (fboundp possible-predicate))
           (register-type-predicate key (symbol-function possible-predicate))
           (symbol-function possible-predicate))))))
 
@@ -137,14 +154,14 @@
 (defun non-negative-integer-p (value)
   (and (integerp value) (>= value 0)))
 (register-type-predicate :non-negative-integer #'non-negative-integer-p
-                         "Must be a non-negative integer")
+  "Must be a non-negative integer")
 
 (defun finite-number-p (value)
   (and (numberp value)
-       (or (not (floatp value))
-           #+sbcl (and (not (sb-ext:float-infinity-p value))
-                       (not (sb-ext:float-nan-p value)))
-           #-sbcl (= value value))))
+    (or (not (floatp value))
+      #+sbcl (and (not (sb-ext:float-infinity-p value))
+               (not (sb-ext:float-nan-p value)))
+      #-sbcl (= value value))))
 (register-type-predicate :finite-number #'finite-number-p "Must be a finite number")
 
 (defun keyword-symbol-p (value)
