@@ -1,12 +1,24 @@
 # cl-state
 
+[![CI](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
+[![Measured coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffkr-0%2Fcl-state%2Fcoverage-badge%2Fcoverage%2Fcoverage-badge.json)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
+
 A state management library for Common Lisp inspired by Elm Architecture and Redux patterns. Provides state containers, patches, transactions, undo/redo, and observers.
 
 ## Release status
 
 The current in-tree candidate version is **0.2.0** for both `cl-state` and
-`cl-state-tests`. This is release-candidate metadata only: the library has not
-been published to Quicklisp, Ultralisp, CLPM, or a separate source repository.
+`cl-state-tests`. A [public GitHub repository](https://github.com/fkr-0/cl-state)
+exists, but this candidate has not been tagged as a release or published to
+Quicklisp, Ultralisp, or the CLPM index.
+
+The CI badge follows actual GitHub Actions runs. The coverage badge reads a
+machine-generated JSON endpoint on the `coverage-badge` branch; that endpoint
+is published **only after** a passing main-branch test and the 85% SB-COVER
+expression threshold. Until the first passing run, the coverage badge is not
+available. CI archives `coverage/cover-index.html` and machine-readable
+`coverage.json`, including per-file counts, the full denominator, and the
+sole exclusion of `src/state/packages.lisp` (package declarations).
 
 The qualified implementation boundary is SBCL on the repository's POSIX/Linux
 CLPM environment. Other Common Lisp implementations and non-POSIX platforms
