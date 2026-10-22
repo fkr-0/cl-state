@@ -28,5 +28,8 @@
 test.log
 *.out
 
-# Cache
+# Cache and generated, never-publishable coverage evidence
 .cache/
+/coverage/
+__pycache__/
+*.pyc

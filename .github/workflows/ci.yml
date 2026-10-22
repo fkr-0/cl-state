@@ -36,7 +36,7 @@ jobs:
         run: clpm bundle install
       - name: Validate coverage gate behavior
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_coverage_gate.py' -v
-      - name: Measure coverage and enforce 85% expression threshold
+      - name: Measure coverage and enforce 78% expression floor (target 85%)
         run: bash scripts/coverage-check.sh
       - name: Upload HTML and machine-readable coverage evidence
         if: always()
@@ -45,32 +45,36 @@ jobs:
           name: cl-state-coverage
           path: coverage/
           if-no-files-found: warn
-  badge:
+  publish-coverage:
+    name: Publish verified percentage endpoint
     needs: coverage
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: cl-state-coverage
-          path: coverage
-      - name: Publish the measured badge endpoint with gh
+          path: evidence
+      - name: Publish measured endpoint with gh CLI
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s coverage/coverage-badge.json
-          branch=coverage-badge
-          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" >/dev/null 2>&1; then
-            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/heads/$branch" -f sha="$GITHUB_SHA" >/dev/null
+          endpoint="$(find evidence -type f -name endpoint.json -print -quit)"
+          test -n "$endpoint"
+          python3 -m json.tool "$endpoint" > /dev/null
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/coverage-data" > /dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/heads/coverage-data" -f sha="$GITHUB_SHA"
           fi
-          path=coverage/coverage-badge.json
-          args=(-f message="ci: publish verified coverage" -f branch="$branch")
-          existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$branch" --jq .sha 2>/dev/null || true)
-          if [[ -n "$existing" ]]; then args+=(-f "sha=$existing"); fi
-          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
-            "${args[@]}" -f "content=$(base64 -w0 < coverage/coverage-badge.json)" >/dev/null
+          args=(-f "branch=coverage-data" \
+                -f "message=chore: update verified coverage badge for $GITHUB_SHA" \
+                -f "content=$(base64 -w0 "$endpoint")")
+          previous="$(gh api "repos/$GITHUB_REPOSITORY/contents/coverage.json?ref=coverage-data" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$previous" ]]; then
+            args+=(-f "sha=$previous")
+          fi
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/coverage.json" "${args[@]}"

@@ -45,6 +45,13 @@ class CoverageGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid coverage counts"):
             measure(self.index, self.source)
 
+    def test_uninstrumented_runtime_file_fails_closed(self):
+        self.index.write_text(html([
+            ("packages.lisp", 0, 9, 0, 0, 0, "-"),
+            ("core.lisp", 0, 0, 0, 0, 0, "-")]), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "zero source expression denominator"):
+            measure(self.index, self.source)
+
     def test_duplicate_source_fails_closed(self):
         self.index.write_text(html([
             ("packages.lisp", 0, 9, 0, 0, 0, "-"),
@@ -52,6 +59,39 @@ class CoverageGateTests(unittest.TestCase):
             ("core.lisp", 9, 10, 90, 1, 2, 50)]), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "duplicate"):
             measure(self.index, self.source)
+
+    def test_publishable_endpoint_requires_passing_gate(self):
+        import json
+        import subprocess
+        import sys
+        self.index.write_text(html([
+            ("packages.lisp", 0, 9, 0, 0, 0, "-"),
+            ("core.lisp", 8, 10, 80, 1, 2, 50)]), encoding="utf-8")
+        output = self.index.parent / "output"
+        script = Path(__file__).with_name("coverage_gate.py")
+        cmd = [sys.executable, str(script), "--index", str(self.index),
+               "--source", str(self.source), "--output", str(output),
+               "--min", "85"]
+        failed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+        self.assertFalse((output / "endpoint.json").exists())
+        self.assertEqual("80.00%", json.loads((output / "coverage-badge.json").read_text())["message"])
+
+        self.index.write_text(html([
+            ("packages.lisp", 0, 9, 0, 0, 0, "-"),
+            ("core.lisp", 9, 10, 90, 1, 2, 50)]), encoding="utf-8")
+        passed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        self.assertEqual(passed.returncode, 0, passed.stdout + passed.stderr)
+        self.assertEqual({"schemaVersion": 1, "label": "coverage",
+                          "message": "90.00%", "color": "brightgreen"},
+                         json.loads((output / "endpoint.json").read_text()))
+
+        # A subsequent failing invocation must invalidate an earlier successful endpoint.
+        self.index.write_text(html([
+            ("packages.lisp", 0, 9, 0, 0, 0, "-"),
+            ("core.lisp", 8, 10, 80, 1, 2, 50)]), encoding="utf-8")
+        subprocess.run(cmd, capture_output=True, text=True, check=False)
+        self.assertFalse((output / "endpoint.json").exists())
 
 
 if __name__ == "__main__":
