@@ -51,6 +51,10 @@ def measure(index: Path, source: Path):
         e, n, b, m = (int(row[i]) for i in (1, 2, 4, 5))
         if not (0 <= e <= n and 0 <= b <= m):
             raise ValueError(f"invalid coverage counts: {name}")
+        # A listed runtime file with no executable expressions is not evidence
+        # that SB-COVER instrumented it. Fail rather than shrink the denominator.
+        if name != "packages.lisp" and n == 0:
+            raise ValueError(f"zero source expression denominator: {name}")
         files[name] = {"expression_covered": e, "expression_total": n,
                        "branch_covered": b, "branch_total": m}
     if set(files) != expected:
@@ -80,16 +84,23 @@ def main():
     a = p.parse_args()
     if not 0 <= a.min <= 100:
         p.error("--min must be between 0 and 100")
+    # Never publish a cached endpoint after an invalid or failing measurement.
+    endpoint = a.output / "endpoint.json"
+    endpoint.unlink(missing_ok=True)
     report = measure(a.index, a.source)
     a.output.mkdir(parents=True, exist_ok=True)
     (a.output / "coverage.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     pc = report["expressions"]["percent"]
+    passed = report["expressions"]["covered"] * 100 >= a.min * report["expressions"]["total"]
     badge = {"schemaVersion": 1, "label": "coverage",
-             "message": f"{pc:.2f}%", "color": "brightgreen" if pc >= a.min else "red"}
+             "message": f"{pc:.2f}%", "color": "brightgreen" if passed else "red"}
     (a.output / "coverage-badge.json").write_text(json.dumps(badge, sort_keys=True) + "\n")
+    if passed:
+        verified = dict(badge, color="brightgreen" if pc >= 90 else "green")
+        endpoint.write_text(json.dumps(verified, sort_keys=True) + "\n")
     print(f"Coverage: {report['expressions']['covered']}/{report['expressions']['total']} "
           f"= {pc:.2f}%; required {a.min:.2f}%. Excluded: packages.lisp only.")
-    if pc < a.min:
+    if not passed:
         raise SystemExit(1)
 
 

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Candidate version: **0.2.0**. This remains an in-tree candidate and is not a
-registry publication or separate-repository release.
+registry publication or tagged release; the GitHub source repository exists.
 
 ### Fixed
 - Reject non-finite real or imaginary components in complex values passed to `finite-number-p` / `:finite-number` validation.
@@ -18,6 +18,8 @@ registry publication or separate-repository release.
 - Clarified the standalone write authority and read-only ElmTUI consumer boundary.
 
 ### Added
+- Added a dedicated GitHub Actions SBCL/CLPM test and measured coverage workflow with verified CI/badge links. Local SBCL 2.6.2 measurement is 78.50%; the initial 78% ratchet preserves the honest baseline while tests target 85%.
+- Added a standalone ws-bridge/OCP project identity and fail-closed coverage-gate regression tests.
 - Monotonic committed revisions via `state-revision`, atomic value/revision reads via `state-value-at-revision`, revision-conditional mutation via `state-set-if-revision`, and `:expected-revision` transaction preconditions.
 - Typed `state-revision-conflict` and `state-transaction-conflict` conditions with inspectable operation and revision context.
 - Structurally shared persistent patch application plus an eager persistent correctness oracle.
