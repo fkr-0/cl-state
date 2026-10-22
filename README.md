@@ -1,12 +1,16 @@
 # cl-state
 
+[![CI](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
+[![Measured coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffkr-0%2Fcl-state%2Fcoverage-data%2Fcoverage.json)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
+
+The coverage percentage comes from the real SB-COVER test run and is published only after passing the main-branch coverage gate. Local SBCL 2.6.2 coverage is **78.50%** over 3,293 runtime expressions, with a conservative **78% regression floor** and an **85% improvement target**. Until CI successfully publishes, no badge percentage is claimed.
+
 A state management library for Common Lisp inspired by Elm Architecture and Redux patterns. Provides state containers, patches, transactions, undo/redo, and observers.
 
 ## Release status
 
 The current in-tree candidate version is **0.2.0** for both `cl-state` and
-`cl-state-tests`. This is release-candidate metadata only: the library has not
-been published to Quicklisp, Ultralisp, CLPM, or a separate source repository.
+`cl-state-tests`. This is release-candidate metadata only: [fkr-0/cl-state](https://github.com/fkr-0/cl-state) is the public source repository, but this candidate has not been tagged as a release or published to Quicklisp, Ultralisp, or a public CLPM index.
 
 The qualified implementation boundary is SBCL on the repository's POSIX/Linux
 CLPM environment. Other Common Lisp implementations and non-POSIX platforms
