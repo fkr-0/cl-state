@@ -3,9 +3,15 @@
 [![CI](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
 [![Measured coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffkr-0%2Fcl-state%2Fcoverage-data%2Fcoverage.json)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
 
-The coverage percentage comes from the real SB-COVER test run and is published only after passing the main-branch coverage gate. Local SBCL 2.6.2 coverage is **78.50%** over 3,293 runtime expressions, with a conservative **78% regression floor** and an **85% improvement target**. Until CI successfully publishes, no badge percentage is claimed.
+The coverage percentage comes from a real SB-COVER test run and is published only after passing the main-branch coverage gate. Local SBCL 2.6.2 verification on 2026-10-23 measured **85.24% (2,807/3,293 expressions)** and **80.63% (358/444 branches)**. The executable-source inventory is unchanged (every `src/state/*.lisp` except the declaration-only `packages.lisp`), and the new expression regression floor is **85%**. These are *local* measurements, not a claim that GitHub CI or the public badge has passed or published.
 
 A state management library for Common Lisp inspired by Elm Architecture and Redux patterns. Provides state containers, patches, transactions, undo/redo, and observers.
+
+## Verification and regression-test patterns
+
+Run the standalone ASDF suite with `CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform --non-interactive --eval '(require :asdf)' --eval '(asdf:test-system \"cl-state\")'`. Run `bash scripts/coverage-check.sh` for the native instrumented SB-COVER gate; `coverage/coverage.json` records actual per-source expression and branch counts. CI uses the same gate and does not accept a smaller source denominator or fabricated badge data.
+
+Regression suites use a few reusable patterns: parameterize state tests over `:hash-table` and `:plist` backends; compare a frozen path-copy result with its untouched source; mutate *owned* snapshots to prove isolation without mutating borrowed `state-ref` values; validate that failures leave revisions, history, and observer delivery unchanged; and synchronize concurrency assertions with condition-variable barriers rather than sleeps. Path-copying tests deliberately cover hash-table, plist, alist, empty/missing, and prune/no-prune cases. Typed validation failures assert context and index diagnostics, not implementation-dependent condition printers. Internal helpers are tested via package-qualified names but are not added to the public API.
 
 ## Release status
 
