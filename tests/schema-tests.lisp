@@ -177,3 +177,74 @@
 
 (defun run-schema-tests ()
   (run! 'schema-suite))
+
+(defun %schema-failure-message (value type &optional context)
+  "Capture the public diagnostic without depending on condition subclasses."
+  (handler-case
+      (progn (validate-type value type context) nil)
+    (error (condition) (princ-to-string condition))))
+
+(test schema-predicate-registry-canonicalization-and-fallback
+  (let* ((type-name :coverage-special-value)
+         (description "Coverage special value"))
+    (is (eq type-name
+            (register-type-predicate "coverage-special-value"
+                                     (lambda (value) (eql value 42))
+                                     description)))
+    (is (funcall (lookup-type-predicate 'coverage-special-value) 42))
+    (is (funcall (lookup-type-predicate "coverage-special-value") 42))
+    (is (not (funcall (lookup-type-predicate type-name) 41)))
+    (is (equal description
+               (second (assoc type-name (list-registered-types)))))
+    (is (eq :coverage-no-description
+            (register-type-predicate :coverage-no-description #'identity)))
+    (is (equal "No description"
+               (second (assoc :coverage-no-description
+                              (list-registered-types)))))
+    (is (funcall (lookup-type-predicate :odd) 3))
+    (is (null (lookup-type-predicate :unregistered-coverage-type)))
+    (is (search "Unknown type"
+                (%schema-failure-message 1 :unregistered-coverage-type)))
+    (is (search description
+                (%schema-failure-message 0 type-name)))))
+
+(test schema-nested-diagnostics-pin-context-and-indices
+  (dolist (case (list
+                  (list '(1 :bad 3) '(list integer) "records" "records[1]")
+                  (list #(1 :bad 3) '(vector integer) "data" "data[1]")
+                  (list '(1 :bad) '(list integer) nil "list item 1")
+                  (list #(1 :bad) '(vector integer) nil "vector item 1")))
+    (destructuring-bind (value type context expected) case
+      (is (search expected (%schema-failure-message value type context)))))
+  (is (search "is not a list"
+              (%schema-failure-message 7 '(list integer))))
+  (is (search "is not a vector"
+              (%schema-failure-message 7 '(vector integer))))
+  (is (search "doesn't match any type"
+              (%schema-failure-message :none '(or integer string))))
+  (is (search "Unsupported type specification"
+              (%schema-failure-message 1 '(unknown integer))))
+  (is (search "Expected:"
+              (%schema-failure-message nil :non-empty-string "user.name")))
+  (is (equal t (validate-type '() '(list integer))))
+  (is (equal t (validate-type #() '(vector integer))))
+  (is (equal t (validate-type 10 '(and integer positive-integer)))))
+
+(test schema-boundary-predicates-and-enum-rejection
+  (dolist (value '("" nil 0 -1 :none))
+    (is-false (non-empty-string-p value)))
+  (is-true (non-negative-integer-p 0))
+  (is-true (non-negative-integer-p 42))
+  (dolist (value '(-1 1.5 :none))
+    (is-false (non-negative-integer-p value)))
+  (is-false (positive-integer-p 0))
+  (is-false (positive-integer-p 1.5))
+  (is-true (keyword-symbol-p :ok))
+  (is-false (keyword-symbol-p 'not-keyword))
+  (is-true (finite-number-p 0))
+  (is-true (finite-number-p 0.0d0))
+  (is-false (finite-number-p :no))
+  (register-enum-type :coverage-enum '(0 1 2))
+  (is (validate-type 0 :coverage-enum))
+  (is (search "Must be one of"
+              (%schema-failure-message 9 :coverage-enum))))

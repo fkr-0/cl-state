@@ -98,6 +98,24 @@
       (is (eq :not-present
               (second (second (application-state-log state))))))))
 
+(test public-state-data-and-log-compatibility-do-not-leak-backing-store
+  (let* ((state (make-state :initial '(:nested (:value 1))))
+         (before (cl-state.api:state-revision state))
+         (snapshot (application-state-data state)))
+    (setf (gethash :value (gethash :nested snapshot)) 19)
+    (is (= 1 (state-ref state '(:nested :value))))
+    (signals error (setf (application-state-data state) nil))
+    (state-set state :created '(:nested 3))
+    (let ((log (application-state-log state)))
+      (is (equal '(:created :not-present (:nested 3)) (first log)))
+      (setf (third (first log)) '(:nested 4))
+      (is (equal '(:nested 3) (third (first (application-state-log state)))))
+      (setf (application-state-log state)
+            (list '(:created :not-present :elmtui-delete-path)))
+      (is (equal '(:created :not-present :elmtui-delete-path)
+                 (first (application-state-log state)))))
+    (is (= (1+ before) (cl-state.api:state-revision state)))))
+
 (test invalid-state-path-is-a-typed-inspectable-error
   (let* ((state (make-state))
          (condition

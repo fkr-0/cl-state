@@ -494,3 +494,65 @@
       (is (= 2 (state-ref state '(:nested :value))))
       (is (eq :missing (state-ref state :gone :missing)))
       (is (= 2 (length events))))))
+
+(test observer-receives-only-committed-revision-after-foreign-transaction
+  "A condition-variable barrier establishes ownership without sleeps or polling.
+   Readers must not see an in-progress write paired with an old commit id."
+  (dolist (backend '(:hash-table :plist))
+    (let* ((state (make-state :backend backend :initial '(:count 0)))
+           (start-revision (state-revision state))
+           (gate (bt:make-lock "cl-state-observer-commit-gate"))
+           (cv (bt:make-condition-variable :name "cl-state-observer-commit-cv"))
+           (ready nil)
+           (release nil)
+           (worker-error nil)
+           (observations nil))
+      (add-observer state :count
+                    (lambda (old new)
+                      (multiple-value-bind (value revision)
+                          (state-value-at-revision state :count)
+                        (push (list old new value revision)
+                              observations))))
+      (let ((worker
+              (bt:make-thread
+               (lambda ()
+                 (handler-case
+                     (with-transaction
+                         (state :name :observer-commit
+                                :expected-revision start-revision)
+                       (state-set state :count 1)
+                       (bt:with-lock-held (gate)
+                         (setf ready t)
+                         (bt:condition-notify cv)
+                         (loop until release
+                               do (bt:condition-wait cv gate))))
+                   (error (condition)
+                     (setf worker-error condition)
+                     (bt:with-lock-held (gate)
+                       (setf ready t)
+                       (bt:condition-notify cv)))))
+               :name "cl-state-observer-commit")))
+        (unwind-protect
+             (progn
+               (bt:with-lock-held (gate)
+                 (loop until ready
+                       do (bt:condition-wait cv gate)))
+               (is (null observations))
+               (is (= start-revision (state-revision state)))
+               (unless worker-error
+                 (signals state-transaction-conflict
+                   (state-value-at-revision state :count))))
+          (bt:with-lock-held (gate)
+            (setf release t)
+            (bt:condition-notify cv))
+          (bt:join-thread worker))
+        (is (null worker-error))
+        (is (= (1+ start-revision) (state-revision state)))
+        (is (= 1 (state-ref state :count)))
+        (is (equal (list (list 0 1 1 (1+ start-revision)))
+                   observations))
+        (signals state-revision-conflict
+          (with-transaction (state :expected-revision start-revision)
+            (state-set state :count 2)))
+        (is (equal (list (list 0 1 1 (1+ start-revision)))
+                   observations))))))
