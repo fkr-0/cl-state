@@ -37,7 +37,7 @@ jobs:
         run: clpm bundle install
       - name: Validate coverage gate behavior
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_coverage_gate.py' -v
-      - name: Measure coverage and enforce 78% expression floor (target 85%)
+      - name: Measure coverage and enforce 85% expression floor
         run: bash scripts/coverage-check.sh
       - name: Upload HTML and machine-readable coverage evidence
         if: always()
