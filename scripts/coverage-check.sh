@@ -11,6 +11,6 @@ clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
   --eval '(asdf:load-system "cl-state-tests")' \
   --eval '(asdf:test-system "cl-state-tests")' \
   --eval '(sb-cover:report #P"coverage/" :if-matches (lambda (path) (search "/src/state/" path)))'
-# Measured 85.24% (2807/3293) on pinned SBCL 2.6.2 after regression additions.
+# After upstream rebase, measured 85.27% (2813/3299) on pinned SBCL 2.6.2.
 # Keep the complete owned-source inventory; fail rather than lower the floor.
 python3 scripts/coverage_gate.py --min 85

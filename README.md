@@ -3,7 +3,7 @@
 [![CI](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
 [![Measured coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffkr-0%2Fcl-state%2Fcoverage-data%2Fcoverage.json)](https://github.com/fkr-0/cl-state/actions/workflows/ci.yml)
 
-The coverage percentage comes from a real SB-COVER test run and is published only after passing the main-branch coverage gate. Local SBCL 2.6.2 verification on 2026-10-23 measured **85.24% (2,807/3,293 expressions)** and **80.63% (358/444 branches)**. The executable-source inventory is unchanged (every `src/state/*.lisp` except the declaration-only `packages.lisp`), and the new expression regression floor is **85%**. These are *local* measurements, not a claim that GitHub CI or the public badge has passed or published.
+The coverage percentage comes from a real SB-COVER test run and is published only after passing the main-branch coverage gate. Local SBCL 2.6.2 verification after rebasing onto tracked upstream on 2026-10-23 measured **85.27% (2,813/3,299 expressions)** and **80.58% (361/448 branches)**. All executable `src/state/*.lisp` files remain included; only the declaration-only `packages.lisp` is excluded. The denominator increased from 3,293 to 3,299 expressions because the upstream finite-complex-number fix added executable code. The expression regression floor remains **85%**. These are *local* measurements, not a claim that GitHub CI or the public badge has passed or published.
 
 A state management library for Common Lisp inspired by Elm Architecture and Redux patterns. Provides state containers, patches, transactions, undo/redo, and observers.
 
