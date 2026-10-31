@@ -386,3 +386,40 @@
     (is (null worker-error))
     (is (= 42 (get-path :value
                         (get-component-by-path state '(:panel)))))))
+
+(test invalid-expected-revision-type-has-no-managed-side-effects
+  (dolist (backend '(:hash-table :plist))
+    (let* ((state (make-state :initial '(:count 1) :backend backend))
+           (version (application-state-version state))
+           (revision (state-revision state))
+           (log (copy-tree (application-state-log state)))
+           (observer-calls 0))
+      (add-observer state :count
+                    (lambda (old new)
+                      (declare (ignore old new))
+                      (incf observer-calls)))
+      (dolist (invalid (list -1 :bogus "0"))
+        (signals type-error
+          (state-set-if-revision state invalid :count 4)))
+      (is (= 1 (state-ref state :count)))
+      (is (= version (application-state-version state)))
+      (is (= revision (state-revision state)))
+      (is (equal log (application-state-log state)))
+      (is (= 0 observer-calls)))))
+
+(test invalid-managed-paths-do-not-change-state-or-revision
+  (dolist (backend '(:hash-table :plist))
+    (let* ((state (make-state :initial '(:count 3) :backend backend))
+           (version (application-state-version state))
+           (revision (state-revision state))
+           (history (application-state-history state))
+           (log (copy-tree (application-state-log state))))
+      (dolist (bad (list '(:count nil) #(:count) '(:count . :bad)))
+        (signals error (state-set state bad 9))
+        (signals error (state-ref state bad))
+        (signals error (state-value-at-revision state bad)))
+      (is (= 3 (state-ref state :count)))
+      (is (= version (application-state-version state)))
+      (is (= revision (state-revision state)))
+      (is (eq history (application-state-history state)))
+      (is (equal log (application-state-log state))))))

@@ -26,6 +26,7 @@ scanning the pre-existing log."
       (values token
               (application-state-log app)
               (application-state-version app)
+              (cl-state.core:application-state-backend app)
               (application-state-history app)
               (application-state-undone app)))))
 
@@ -51,7 +52,7 @@ EXPECTED-REVISION is an optimistic precondition checked atomically before APP is
 reserved. Same-state nesting joins the outer transaction and may repeat the
 same revision precondition; it is not a savepoint. Other supported writers are
 rejected with STATE-TRANSACTION-CONFLICT while the outer body is active.
-Rollback restores logical values, VERSION, log, history, and redo metadata;
+Rollback restores logical values, physical backend, VERSION, log, history, and redo metadata;
 REVISION advances exactly once only after a successful outer commit. Observer
 callbacks run after reservation is released and after all internal locks are
 released."
@@ -66,7 +67,8 @@ released."
                                     :operation :nested-transaction))
            ,@body)
          (multiple-value-bind
-               (token# start-log-anchor# start-version# start-history# start-undone#)
+               (token# start-log-anchor# start-version# start-backend#
+                start-history# start-undone#)
              (%reserve-transaction app# expected-revision#)
            (let ((committedp# nil)
                  (result-values# nil)
@@ -84,7 +86,7 @@ released."
                           committedp# t))
                (unless committedp#
                  (%restore-transaction-state
-                  app# token# start-log-anchor# start-version#
+                  app# token# start-log-anchor# start-version# start-backend#
                   start-history# start-undone#)))
              (%notify-transaction-changes app# ordered-changes#)
              (values-list result-values#))))))
@@ -107,7 +109,8 @@ silently committing against corrupted transaction metadata."
                     :operation :transaction-log-anchor))
         collect (car cursor)))
 
-(defun %restore-transaction-state (app token start-log-anchor start-version start-history start-undone)
+(defun %restore-transaction-state (app token start-log-anchor start-version
+                                   start-backend start-history start-undone)
   "Roll APP back to the metadata and logical values captured at transaction entry."
   (bt:with-lock-held ((application-state-lock app))
     (unless (eq token (cl-state.core::application-state-transaction-owner app))
@@ -125,6 +128,13 @@ silently committing against corrupted transaction metadata."
                           (application-state-data app) path)
                          (cl-state.utils:set-path
                           (application-state-data app) path old)))))
+           ;; SET-APPLICATION-STATE-BACKEND inside a failed body changes only
+           ;; representation; restore it so rollback is physical as well as logical.
+           (unless (eq start-backend (cl-state.core:application-state-backend app))
+             (setf (application-state-data app)
+                   (cl-state.utils:coerce-data (application-state-data app)
+                                               start-backend)
+                   (cl-state.core:application-state-backend app) start-backend))
            (setf (application-state-log app) start-log-anchor
                  (application-state-version app) start-version
                  (application-state-history app) start-history

@@ -556,3 +556,43 @@
             (state-set state :count 2)))
         (is (equal (list (list 0 1 1 (1+ start-revision)))
                    observations))))))
+
+(test failed-transaction-restores-physical-backend
+  "A failed transaction must restore representation as well as logical values."
+  (dolist (initial-backend '(:hash-table :plist))
+    (let* ((other-backend (if (eq initial-backend :plist) :hash-table :plist))
+           (state (make-state :backend initial-backend :initial '(:count 1)))
+           (revision (state-revision state)))
+      (signals error
+        (with-transaction (state)
+          (set-application-state-backend state other-backend)
+          (state-set state :count 3)
+          (error "forced rollback")))
+      (is (eq initial-backend (application-state-backend state)))
+      (is (= 1 (state-ref state :count)))
+      (is (= revision (state-revision state))))))
+
+(test failed-nested-revision-precondition-rolls-back-outer-transaction
+  (dolist (backend '(:hash-table :plist))
+    (let* ((state (make-state :initial '(:count 1) :backend backend))
+           (revision (state-revision state))
+           (version (application-state-version state))
+           (history (application-state-history state))
+           (log (copy-tree (application-state-log state)))
+           (observer-calls 0))
+      (add-observer state :count
+                    (lambda (old new)
+                      (declare (ignore old new))
+                      (incf observer-calls)))
+      (signals state-revision-conflict
+        (with-transaction (state :name :outer :expected-revision revision)
+          (state-set state :count 2)
+          (with-transaction (state :name :inner
+                                   :expected-revision (1+ revision))
+            (state-set state :count 3))))
+      (is (= 1 (state-ref state :count)))
+      (is (= revision (state-revision state)))
+      (is (= version (application-state-version state)))
+      (is (eq history (application-state-history state)))
+      (is (equal log (application-state-log state)))
+      (is (= 0 observer-calls)))))
